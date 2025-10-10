@@ -1,12 +1,12 @@
-name: Passport Daily Commits (Fixed Year)
+name: Fixed Passport Backdated Commits
 
 on:
-  workflow_dispatch:    # manual trigger
+  workflow_dispatch:
   schedule:
-    - cron: "0 0 * * *" # runs daily
+    - cron: '0 0 * * *'   # daily at midnight UTC
 
 jobs:
-  commit:
+  backdate-and-daily:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -23,28 +23,48 @@ jobs:
             echo "Daily commit tracker for Passport" > daily_commits.txt
           fi
 
-      - name: Create backdated commits from 2022
+      - name: Create evenly spaced backdated commits (2022 → today)
+        env:
+          START_DATE: '2022-10-11'
+          COMMITS: 120
         run: |
-          if [ ! -f backdated_done.flag ]; then
-            for i in {120..1}; do
-              # Adjust the date manually to 2022–2025 range
-              BASE_YEAR=$((2022 + (i / 40)))  # spreads commits across 2022, 2023, 2024, 2025
-              MONTH=$(( (i % 12) + 1 ))
-              DAY=$(( (i % 28) + 1 ))
-              DATE=$(printf "%04d-%02d-%02dT12:00:00" $BASE_YEAR $MONTH $DAY)
-              echo "Backdated commit $DATE" >> daily_commits.txt
-              GIT_AUTHOR_DATE=$DATE GIT_COMMITTER_DATE=$DATE git add daily_commits.txt
-              GIT_AUTHOR_DATE=$DATE GIT_COMMITTER_DATE=$DATE git commit -m "Backdated commit $DATE"
-            done
-            touch backdated_done.flag
-            git add backdated_done.flag
-            git commit -m "Backdate completed flag"
-            git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          # only run once
+          if [ -f backdated_done.flag ]; then
+            echo "Backdating already done"
+            exit 0
           fi
 
-      - name: Daily commit
+          START="$START_DATE"
+          END=$(date -u +"%Y-%m-%d")
+          start_sec=$(date -d "$START" +%s)
+          end_sec=$(date -d "$END" +%s)
+          total_days=$(( (end_sec - start_sec) / 86400 ))
+          # step between dates (integer)
+          step=$(( total_days / (COMMITS - 1) ))
+          echo "Total days=$total_days step=$step"
+
+          for i in $(seq 0 $((COMMITS - 1))); do
+            offset=$(( i * step ))
+            DATE=$(date -u -d "$START + $offset days" +"%Y-%m-%dT12:00:00Z")
+            echo "Backdated commit $DATE" >> daily_commits.txt
+
+            # create commit with explicit author and committer dates
+            GIT_AUTHOR_DATE="$DATE" GIT_COMMITTER_DATE="$DATE" \
+            git add daily_commits.txt && \
+            GIT_AUTHOR_DATE="$DATE" GIT_COMMITTER_DATE="$DATE" \
+            git commit --author="Pinkberry2090 <ositaonyi.2090@gmail.com>" --date="$DATE" -m "Backdated commit $DATE" || true
+          done
+
+          # add flag and push all at once
+          touch backdated_done.flag
+          git add backdated_done.flag
+          git commit -m "Backdate completed flag" || true
+
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+
+      - name: Daily commit (today)
         run: |
-          echo "Commit for $(date)" >> daily_commits.txt
+          echo "Commit for $(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> daily_commits.txt
           git add daily_commits.txt
-          git commit -m "Daily commit $(date)" || echo "No changes to commit"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git commit -m "Daily commit $(date -u +"%Y-%m-%dT%H:%M:%SZ")" || echo "No changes to commit"
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
