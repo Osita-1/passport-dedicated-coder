@@ -1,9 +1,9 @@
-name: Passport Daily Commits
+name: Passport Daily Commits (Fixed Year)
 
 on:
-  workflow_dispatch:    # manual trigger for backdating
+  workflow_dispatch:    # manual trigger
   schedule:
-    - cron: "0 0 * * *" # daily at midnight UTC
+    - cron: "0 0 * * *" # runs daily
 
 jobs:
   commit:
@@ -23,11 +23,15 @@ jobs:
             echo "Daily commit tracker for Passport" > daily_commits.txt
           fi
 
-      - name: Create backdated commits (last 120 days)
+      - name: Create backdated commits from 2022
         run: |
           if [ ! -f backdated_done.flag ]; then
             for i in {120..1}; do
-              DATE=$(date -d "$i days ago" +"%Y-%m-%dT12:00:00")
+              # Adjust the date manually to 2022–2025 range
+              BASE_YEAR=$((2022 + (i / 40)))  # spreads commits across 2022, 2023, 2024, 2025
+              MONTH=$(( (i % 12) + 1 ))
+              DAY=$(( (i % 28) + 1 ))
+              DATE=$(printf "%04d-%02d-%02dT12:00:00" $BASE_YEAR $MONTH $DAY)
               echo "Backdated commit $DATE" >> daily_commits.txt
               GIT_AUTHOR_DATE=$DATE GIT_COMMITTER_DATE=$DATE git add daily_commits.txt
               GIT_AUTHOR_DATE=$DATE GIT_COMMITTER_DATE=$DATE git commit -m "Backdated commit $DATE"
