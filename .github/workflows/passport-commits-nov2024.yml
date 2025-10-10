@@ -1,0 +1,53 @@
+name: Passport Commits from Nov 2024
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'  # runs daily at midnight UTC
+
+jobs:
+  backdate-and-daily:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "Pinkberry2090"
+          git config --global user.email "ositaonyi.2090@gmail.com"
+
+      - name: Ensure tracker file exists
+        run: |
+          if [ ! -f daily_commits.txt ]; then
+            echo "Daily commit tracker for Passport" > daily_commits.txt
+          fi
+
+      - name: Backdate commits from Nov 2024 to today
+        run: |
+          if [ ! -f backdated_done.flag ]; then
+            start_date="2024-11-01"
+            end_date=$(date +"%Y-%m-%d")
+            current_date=$start_date
+
+            while [ "$(date -d "$current_date" +%s)" -le "$(date -d "$end_date" +%s)" ]; do
+              echo "Backdated commit $current_date" >> daily_commits.txt
+              GIT_AUTHOR_DATE="$current_date 12:00:00" GIT_COMMITTER_DATE="$current_date 12:00:00" \
+              git add daily_commits.txt
+              GIT_AUTHOR_DATE="$current_date 12:00:00" GIT_COMMITTER_DATE="$current_date 12:00:00" \
+              git commit --author="Pinkberry2090 <ositaonyi.2090@gmail.com>" -m "Backdated commit $current_date" || echo "skip"
+              current_date=$(date -I -d "$current_date + 1 day")
+            done
+
+            touch backdated_done.flag
+            git add backdated_done.flag
+            git commit -m "Backdate completed flag" || echo "skip"
+            git push origin main
+          fi
+
+      - name: Daily commit
+        run: |
+          echo "Daily commit for $(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> daily_commits.txt
+          git add daily_commits.txt
+          git commit -m "Daily commit $(date -u +"%Y-%m-%dT%H:%M:%SZ")" || echo "No changes to commit"
+          git push origin main
